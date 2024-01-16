@@ -1,0 +1,65 @@
+{%load static%}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+        <link rel="stylesheet" type="text/css" href="{% static 'css/style2.css' %}">
+       
+
+        <title>77GPT</title>
+        <link rel="icon" type="image/x-icon" href="{% static 'images/favicon.ico' %}">
+    </head>
+    <body>
+        
+        
+        <div class="chatbox-wrapper" title="Chat with our AI">
+            <div class="chatbox-toggle">
+                <i class='bx bx-message-rounded-dots'></i>
+            </div>
+            <div class="chatbox-message-wrapper">
+                <div class="chatbox-message-header">
+                    <div class="chatbox-message-profile">
+                        <img src="{% static 'images/ai.png' %}" alt="" class="chatbox-message-image">
+                        <div>
+                            <h4 class="chatbox-message-name">Chat with AI</h4>
+                            <div class="chatbox-message-status">
+                                <div class="status-indicator online"></div>
+                                <p>Online</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chatbox-message-dropdown">
+                        <i class='bx bx-dots-vertical-rounded chatbox-message-dropdown-toggle' ></i>
+                        <ul class="chatbox-message-dropdown-menu">
+                            <li>
+                                <a href="#">Search</a>
+                            </li>
+                            <li>
+                                <a href="#">Report</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="chatbox-message-content">
+                    <div class="chatbox-message-no-message">
+                        <h3>Hi! How may I assist you?</h3>
+                        <h5>Type "exit" to end chat</h5>
+                    </div>
+                </div>
+                <div class="chatbox-message-bottom">
+                    <form action="{% url 'ai_response' %}" method="post" class="chatbox-message-form" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <textarea name="userMessage" rows="1" placeholder="Type message..." class="chatbox-message-input"></textarea>
+                        <button type="submit" class="chatbox-message-submit"><i class='bx bx-send'></i></button>
+                    </form>
+                </div>
+            
+            </div>
+
+        </div>
+        <script src="{% static 'js/script.js' %}"></script>
+
+    </body>
+</html>
