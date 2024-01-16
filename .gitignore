@@ -1,2 +1,2 @@
 env
-**/*.env
+/chatbot/chatbot_app/.env
