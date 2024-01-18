@@ -30,24 +30,55 @@ def connect_to_database():
 
 
 # 
-def extract_data_from_database(connection):
+# def extract_data_from_database(connection):
+#     cursor = connection.cursor()
+
+#     # Example query - replace with your own SQL query
+#     query = "SELECT * FROM it_qas_data limit 20;"
+#     cursor.execute(query)
+
+#     # Fetch all the results
+#     data = cursor.fetchall()
+
+#     # Get the column names
+#     column_names = [desc[0] for desc in cursor.description]
+
+#     # Convert the result to a list of dictionaries
+#     result_as_dict = [dict(zip(column_names, row)) for row in data]
+
+#     cursor.close()
+#     return str(result_as_dict)
+
+
+def extract_table_names(connection):
+
     cursor = connection.cursor()
+    query_tables = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
+    cursor.execute(query_tables)
 
-    # Example query - replace with your own SQL query
-    query = "SELECT * FROM users;"
-    cursor.execute(query)
-
-    # Fetch all the results
-    data = cursor.fetchall()
-
-    # Get the column names
-    column_names = [desc[0] for desc in cursor.description]
-
-    # Convert the result to a list of dictionaries
-    result_as_dict = [dict(zip(column_names, row)) for row in data]
-
+    table_names = cursor.fetchall()
     cursor.close()
-    return str(result_as_dict)
+
+    table_names = [name_tuple[0] for name_tuple in table_names]
+
+    return table_names
+
+    
+def extract_data_from_database(connection, table_names):
+
+   
+    data_dict = {}
+    for name in table_names:
+        cursor = connection.cursor()
+        query = f'Select * from {name} limit 3;'
+        cursor.execute(query)
+        data = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
+        result_as_dict = [dict(zip(column_names, map(str, row))) for row in data]
+        data_dict[name] = result_as_dict 
+        cursor.close()
+
+    return str(data_dict)
 
 
 
@@ -55,7 +86,9 @@ def ai_response(request):
 
 
     connection = connect_to_database()
-    users_table = extract_data_from_database(connection)
+    # users_table = extract_data_from_database(connection)
+    table_names = extract_table_names(connection)
+    tables_data = extract_data_from_database(connection, table_names)
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     kb_folder = os.path.join(base_dir, 'ai_app', 'kb')
@@ -86,15 +119,19 @@ def ai_response(request):
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "system", "content": steps},
-                    {"role": "system", "content": users_table},
+                    # {"role": "system", "content": steps},
+                    {"role": "system", "content": tables_data},
                     *conversation_history
                 ]
             )
-    print(response)
+    print(response['usage'])
+    # print(conversation_history)
     
      # Extract the assistant's reply from the API response
     assistant_reply = response['choices'][0]['message']['content']
+
+    # Add the assistant's reply to the conversation history
+    conversation_history.append({"role": "assistant", "content": assistant_reply})
 
     # Update the conversation history in the session
     request.session['conversation_history'] = conversation_history
