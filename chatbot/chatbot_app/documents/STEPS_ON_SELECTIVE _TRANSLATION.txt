@@ -1,0 +1,20 @@
+STEPS ON SELECTIVE TRANSLATION
+
+Steps: 
+
+1. Click the compass button “My Social and Collaborative Apps” then click “Copy & Artwork Management”.
+
+2. Click Product Lines under Product Line and then click the Brand name.
+
+3. Go to the level where the POA is present.
+
+4. Click “Categories” then “Copy and Artwork” then select “POAs” tab.
+
+5. Mark the checkbox of the POA you are going to do the selective translation then click “Edit POAs” button. 
+
+6. Edit POAs window will appear, select the language/s of the copy element to skip or include.
+
+7. Click “Add/Remove Local Copy” then new window will appear at the right side, then skip or include language/s and click “Save” button.
+
+8. The language/s will now be reflected in the selected Copy Elements.
+ 
