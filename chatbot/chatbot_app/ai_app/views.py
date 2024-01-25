@@ -6,7 +6,7 @@ from django.http import JsonResponse, HttpResponse
 from chatbot_app.config import OPENAI_KEY, DB_NAME, USER, PASSWORD, HOST, PORT, MODEL_NAME
 import os
 import psycopg2
-import constants
+import django_app.chatbot.chatbot_app.constants as constants
 
 from langchain_community.document_loaders import DirectoryLoader
 from langchain.indexes import VectorstoreIndexCreator
