@@ -1,24 +1,22 @@
 from django.shortcuts import render
 import json
-# import openai
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
-from chatbot_app.config import OPENAI_KEY, DB_NAME, USER, PASSWORD, HOST, PORT, MODEL_NAME
 import os
-import psycopg2
-import django_app.chatbot.chatbot_app.constants as constants
-
+# import django_app.chatbot.chatbot_app.constants as constants
+import constants
+import os
 from langchain_community.document_loaders import DirectoryLoader
-from langchain.indexes import VectorstoreIndexCreator
-from langchain_openai import ChatOpenAI
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI, OpenAI
+from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
+from langchain.chains.question_answering import load_qa_chain
+from langchain_community.callbacks import get_openai_callback
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, TextLoader
+import time
 
 os.environ["OPENAI_API_KEY"] = constants.OPENAI_API_KEY
-
-# openai.api_key = OPENAI_KEY
-
 
 
 # Create your views here.
@@ -28,113 +26,57 @@ def chat(request):
     return render(request, 'chat.html')
 
 
+documents = []
 
-def connect_to_database():
-    connection = psycopg2.connect(
-    host = HOST,
-    database = DB_NAME,
-    user = USER,
-    password = PASSWORD
-    )
-    return connection
+def process_file(file_path):
+        if file_path.endswith('.pdf'):
+            loader = PyPDFLoader(file_path)
+            documents.extend(loader.load())
+        elif file_path.endswith('.docx') or file_path.endswith('.doc'):
+            loader = Docx2txtLoader(file_path)
+            documents.extend(loader.load())
+        elif file_path.endswith('.txt'):
+            loader = TextLoader(file_path, encoding='utf-8')
+            documents.extend(loader.load())
 
+    # Specify the root folder
+root_folder = './documents'
 
-# 
-# def extract_data_from_database(connection):
-#     cursor = connection.cursor()
+# Walk through the directory tree
+for folder, _, files in os.walk(root_folder):
+    for file in files:
+        file_path = os.path.join(folder, file)
+        process_file(file_path)
 
-#     # Example query - replace with your own SQL query
-#     query = "SELECT * FROM it_qas_data limit 20;"
-#     cursor.execute(query)
-
-#     # Fetch all the results
-#     data = cursor.fetchall()
-
-#     # Get the column names
-#     column_names = [desc[0] for desc in cursor.description]
-
-#     # Convert the result to a list of dictionaries
-#     result_as_dict = [dict(zip(column_names, row)) for row in data]
-
-#     cursor.close()
-#     return str(result_as_dict)
-
-
-def extract_table_names(connection):
-
-    cursor = connection.cursor()
-    query_tables = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
-    cursor.execute(query_tables)
-
-    table_names = cursor.fetchall()
-    cursor.close()
-
-    table_names = [name_tuple[0] for name_tuple in table_names]
-
-    return table_names
-
-    
-def extract_data_from_database(connection, table_names):
-
-   
-    data_dict = {}
-    for name in table_names:
-        if name == 'sharepoint_data':
-            cursor = connection.cursor()
-            query = f'Select * from {name} limit 20;'
-            cursor.execute(query)
-            data = cursor.fetchall()
-            column_names = [desc[0] for desc in cursor.description]
-            result_as_dict = [dict(zip(column_names, map(str, row))) for row in data]
-            data_dict[name] = result_as_dict 
-            cursor.close()
-
-    return str(data_dict)
-
-
+# To split and chunks the loaded documents into smaller token
+text_splitter = CharacterTextSplitter(separator = "\n",chunk_size=400, chunk_overlap=50)
+docs =  text_splitter.split_documents(documents)
+# For embeddings
 embeddings = OpenAIEmbeddings()
+# For text searching
+db = FAISS.from_documents(docs, embeddings)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
+chain = load_qa_chain(llm, chain_type="stuff")
 
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-documents = os.path.join(base_dir, 'ai_app', 'documents')
-print(documents)
 
 
-loader = DirectoryLoader("documents", glob="**/*.txt", recursive = True)
-index = VectorstoreIndexCreator(vectorstore_cls=Chroma, 
-                                    embedding=embeddings, 
-                                    text_splitter=CharacterTextSplitter(separator = "\n",chunk_size=400, chunk_overlap=50),
-                                    vectorstore_kwargs={ "persist_directory": '/documents'}
-                                    ).from_loaders([loader])
 
-def third_model(user_message):
-    
-    response =  index.query(user_message, llm=ChatOpenAI())
+def model_respomse(user_prompt):
 
-    return response
+
+        docs = db.similarity_search(user_prompt)
+        response = chain.invoke({'input_documents': docs, 'question': user_prompt}, return_only_outputs=True)
+        
+        return response['output_text']
 
 
 def ai_response(request):
-
-
-    connection = connect_to_database()
-    # users_table = extract_data_from_database(connection)
-    table_names = extract_table_names(connection)
-    tables_data = extract_data_from_database(connection, table_names)
-
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    kb_folder = os.path.join(base_dir, 'ai_app', 'kb')
-    # file_path = os.path.join(kb_folder, 'steps.txt')
-
-    # with open(file_path, 'r', encoding='utf-8') as file:
-    #     steps = file.read()
-
-    
-
+   
     try:
         data = json.loads(request.body)
         user_message = data.get('userMessage', '')
-        # print(f"User Message: {user_message}")
-        
+        start = time.time()
+       
         
     except json.JSONDecodeError:
         # Handle JSON decoding error
@@ -147,22 +89,18 @@ def ai_response(request):
     # Add the user message to the conversation history
     conversation_history.append({"role": "user", "content": user_message})
     
-    # response = openai.ChatCompletion.create(
-    #             model=MODEL_NAME,
-    #             messages=[
-    #                 {"role": "system", "content": "You are a helpful assistant."},
-    #                 {"role": "system", "content": steps},
-    #                 # {"role": "system", "content": tables_data},
-    #                 *conversation_history
-    #             ]
-    #         )
-    
-    # print(response['usage'])
-    response = third_model(user_message)
-    # print(conversation_history)
-    
-     # Extract the assistant's reply from the API response
-    # assistant_reply = response['choices'][0]['message']['content']
+    # response = model_respomse(user_message)
+    with get_openai_callback() as cb:
+                    
+                    response = model_respomse(user_message)
+                    print(response)
+
+                    # end = datetime.now()
+                    end = time.time()
+                    response_time = end - start
+
+                    print(cb)
+                    print(response_time)
     assistant_reply = response
 
     # Add the assistant's reply to the conversation history
