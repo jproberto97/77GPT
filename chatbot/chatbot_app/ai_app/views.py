@@ -10,10 +10,14 @@ from langchain_community.document_loaders import DirectoryLoader
 from langchain_openai import ChatOpenAI, OpenAI
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.chains.question_answering import load_qa_chain
 from langchain_community.callbacks import get_openai_callback
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, TextLoader
+from langchain.prompts import PromptTemplate
+from langchain.memory import ConversationBufferWindowMemory
+from langchain.chains import ConversationalRetrievalChain
+
+
 import time
 
 os.environ["OPENAI_API_KEY"] = constants.OPENAI_API_KEY
@@ -53,21 +57,43 @@ text_splitter = CharacterTextSplitter(separator = "\n",chunk_size=400, chunk_ove
 docs =  text_splitter.split_documents(documents)
 # For embeddings
 embeddings = OpenAIEmbeddings()
+
+prompt_template = "You're name is Bebe and your are an AI assistant. If the user tells you about his/her life, remember it.\
+            If you don't know the answer, just say 'I don't know'. Don't try to make any other answer.\
+            Input document: {context}\
+            \
+            Human: {question}\
+            AI: "
+    
+PROMPT = PromptTemplate(
+    template=prompt_template, 
+    input_variables=["context", "question"])
+
+
 # For text searching
 db = FAISS.from_documents(docs, embeddings)
+retriever = db.as_retriever(search_type="similarity", search_kwargs={"k":5, "score_threshold": .65})
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
-chain = load_qa_chain(llm, chain_type="stuff")
+
+chat_history = []
+memory = ConversationBufferWindowMemory(k=3, memory_key="chat_history", return_messages=True, output_key="answer")
+
+qa = ConversationalRetrievalChain.from_llm(llm,
+                                                retriever,
+                                                return_source_documents=True,
+                                                memory = memory,
+                                                combine_docs_chain_kwargs={"prompt": PROMPT},
+                                                verbose=True)
 
 
 
 
-def model_respomse(user_prompt):
+def model_response(user_prompt):
 
-
-        docs = db.similarity_search(user_prompt)
-        response = chain.invoke({'input_documents': docs, 'question': user_prompt}, return_only_outputs=True)
+        response = qa.invoke({"question": user_prompt, 'chat_history': chat_history})
+        chat_history.append((user_prompt, response["answer"]))
         
-        return response['output_text']
+        return response['answer']
 
 
 def ai_response(request):
@@ -86,13 +112,15 @@ def ai_response(request):
     # Retrieve or initialize conversation history from the session
     conversation_history = request.session.get('conversation_history', [])
 
+    
+
     # Add the user message to the conversation history
     conversation_history.append({"role": "user", "content": user_message})
     
     # response = model_respomse(user_message)
     with get_openai_callback() as cb:
                     
-                    response = model_respomse(user_message)
+                    response = model_response(user_message)
                     print(response)
 
                     # end = datetime.now()
